@@ -28,8 +28,9 @@ export default function App() {
   const [isEditMode, setIsEditMode] = useState(false);
   
   // Non-payers groups
-  const [nonPayerDrinkers, setNonPayerDrinkers] = useState<number>(0);
-  const [nonPayerNonDrinkers, setNonPayerNonDrinkers] = useState<number>(0);
+  const [nonPayerNormal, setNonPayerNormal] = useState<number>(0);
+  const [nonPayerNoAlcohol, setNonPayerNoAlcohol] = useState<number>(0);
+  const [nonPayerNoFood, setNonPayerNoFood] = useState<number>(0);
 
   const addParticipant = () => {
     setParticipants([
@@ -56,22 +57,22 @@ export default function App() {
     const totalPaid = totalGeneral + totalAlcohol;
     
     const payerDrinkers = participants.filter(p => p.drank).length;
-    const totalHeadcount = participants.length + nonPayerDrinkers + nonPayerNonDrinkers;
-    const totalDrinkers = payerDrinkers + nonPayerDrinkers;
+    const totalFoodEaters = participants.length + nonPayerNormal + nonPayerNoAlcohol;
+    const totalDrinkers = payerDrinkers + nonPayerNormal + nonPayerNoFood;
     
-    const perPersonGeneral = totalHeadcount > 0 ? totalGeneral / totalHeadcount : 0;
+    const perPersonGeneral = totalFoodEaters > 0 ? totalGeneral / totalFoodEaters : 0;
     const perPersonAlcohol = totalDrinkers > 0 ? totalAlcohol / totalDrinkers : 0;
 
     return {
       totalPaid,
       totalGeneral,
       alcoholTotalCost: totalAlcohol,
-      totalHeadcount,
+      totalFoodEaters,
       totalDrinkers,
       perPersonGeneral,
       perPersonAlcohol,
     };
-  }, [participants, nonPayerDrinkers, nonPayerNonDrinkers]);
+  }, [participants, nonPayerNormal, nonPayerNoAlcohol, nonPayerNoFood]);
 
   const settlements = useMemo(() => {
     const rawResults: Settlement[] = [];
@@ -96,22 +97,29 @@ export default function App() {
 
     // 2. Unpaid Group members pay FULL amount to the Main Creditor
     if (mainCreditor) {
-      if (nonPayerDrinkers > 0) {
+      if (nonPayerNormal > 0) {
         rawResults.push({
-          from: '未付組(喝)',
+          from: '未付組(正常)',
           to: mainCreditor.name,
           amount: parseFloat(perDrinkerOwes.toFixed(2))
         });
-        // Important: Update balance. We multiply by count to represent total intake
-        mainCreditor.balance -= (perDrinkerOwes * nonPayerDrinkers);
+        mainCreditor.balance -= (perDrinkerOwes * nonPayerNormal);
       }
-      if (nonPayerNonDrinkers > 0) {
+      if (nonPayerNoAlcohol > 0) {
         rawResults.push({
-          from: '未付組(無)',
+          from: '未付組(沒酒)',
           to: mainCreditor.name,
           amount: parseFloat(perNonDrinkerOwes.toFixed(2))
         });
-        mainCreditor.balance -= (perNonDrinkerOwes * nonPayerNonDrinkers);
+        mainCreditor.balance -= (perNonDrinkerOwes * nonPayerNoAlcohol);
+      }
+      if (nonPayerNoFood > 0) {
+        rawResults.push({
+          from: '未付組(沒吃)',
+          to: mainCreditor.name,
+          amount: parseFloat(totals.perPersonAlcohol.toFixed(2))
+        });
+        mainCreditor.balance -= (totals.perPersonAlcohol * nonPayerNoFood);
       }
     }
 
@@ -141,10 +149,11 @@ export default function App() {
     // 4. Final grouping/formatting for UI display
     // Note: Since we want "Unpaid Group" to show count, we keep the flag
     return rawResults.map(res => {
-      const isDrinkersGroup = res.from === '未付組(喝)';
-      const isNonDrinkersGroup = res.from === '未付組(無)';
-      const isGroup = isDrinkersGroup || isNonDrinkersGroup;
-      const count = isDrinkersGroup ? nonPayerDrinkers : (isNonDrinkersGroup ? nonPayerNonDrinkers : 1);
+      const isNormal = res.from === '未付組(正常)';
+      const isNoAlcohol = res.from === '未付組(沒酒)';
+      const isNoFood = res.from === '未付組(沒吃)';
+      const isGroup = isNormal || isNoAlcohol || isNoFood;
+      const count = isNormal ? nonPayerNormal : (isNoAlcohol ? nonPayerNoAlcohol : (isNoFood ? nonPayerNoFood : 1));
       
       return {
         ...res,
@@ -153,13 +162,14 @@ export default function App() {
         isSplit: false
       };
     });
-  }, [participants, totals, nonPayerDrinkers, nonPayerNonDrinkers]);
+  }, [participants, totals, nonPayerNormal, nonPayerNoAlcohol, nonPayerNoFood]);
 
   const resetAll = () => {
     if (confirm('確定要清除所有紀錄嗎？')) {
       setParticipants([{ id: '1', name: '', paid: 0, alcoholPaid: 0, drank: true }]);
-      setNonPayerDrinkers(0);
-      setNonPayerNonDrinkers(0);
+      setNonPayerNormal(0);
+      setNonPayerNoAlcohol(0);
+      setNonPayerNoFood(0);
     }
   };
 
@@ -295,8 +305,8 @@ export default function App() {
                 <div className="flex items-center justify-between border-b border-gray-300/50 pb-3">
                   <h2 className="text-base font-black text-[#3A3A3A] tracking-[0.25em] uppercase">未付組/酒水</h2>
                   <div className="px-3 py-1 bg-white/70 rounded-lg border border-white shadow-inner">
-                    <span className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-tighter">總計</span>
-                    <span className="text-sm font-mono font-black text-[#3A3A3A]">{totals.totalHeadcount}人</span>
+                    <span className="text-[10px] font-black text-gray-400 mr-2 uppercase tracking-tighter">總頭數</span>
+                    <span className="text-sm font-mono font-black text-[#3A3A3A]">{participants.length + nonPayerNormal + nonPayerNoAlcohol + nonPayerNoFood}人</span>
                   </div>
                 </div>
 
@@ -304,17 +314,17 @@ export default function App() {
                   <div className="flex items-center justify-between p-3 bg-[#9C7A7B]/5 rounded-2xl border border-[#9C7A7B]/10">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-[#9C7A7B] rounded-full" />
-                      <span className="text-xs font-bold text-[#9C7A7B] uppercase tracking-widest">未付組(喝)</span>
+                      <span className="text-xs font-bold text-[#9C7A7B] uppercase tracking-widest">未付組(正常)</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <button 
-                        onClick={() => setNonPayerDrinkers(Math.max(0, nonPayerDrinkers - 1))}
-                        className="w-7 h-7 rounded-lg bg-white border border-gray-300 text-gray-500 flex items-center justify-center hover:bg-gray-50 text-sm font-bold shadow-sm"
+                         onClick={() => setNonPayerNormal(Math.max(0, nonPayerNormal - 1))}
+                         className="w-7 h-7 rounded-lg bg-white border border-gray-300 text-gray-500 flex items-center justify-center hover:bg-gray-50 text-sm font-bold shadow-sm"
                       >-</button>
-                      <span className="font-mono text-base font-bold text-[#3A3A3A] w-8 text-center">{nonPayerDrinkers}</span>
+                      <span className="font-mono text-base font-bold text-[#3A3A3A] w-8 text-center">{nonPayerNormal}</span>
                       <button 
-                        onClick={() => setNonPayerDrinkers(nonPayerDrinkers + 1)}
-                        className="w-7 h-7 rounded-lg bg-white border border-[#7A8A95] text-[#7A8A95] flex items-center justify-center hover:bg-[#7A8A95]/10 text-sm font-bold shadow-sm"
+                         onClick={() => setNonPayerNormal(nonPayerNormal + 1)}
+                         className="w-7 h-7 rounded-lg bg-white border border-[#7A8A95] text-[#7A8A95] flex items-center justify-center hover:bg-[#7A8A95]/10 text-sm font-bold shadow-sm"
                       >+</button>
                     </div>
                   </div>
@@ -322,17 +332,35 @@ export default function App() {
                   <div className="flex items-center justify-between p-3 bg-[#8A957A]/5 rounded-2xl border border-[#8A957A]/10">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-[#8A957A] rounded-full" />
-                      <span className="text-xs font-bold text-[#8A957A] uppercase tracking-widest">未付組(無)</span>
+                      <span className="text-xs font-bold text-[#8A957A] uppercase tracking-widest">未付組(沒酒)</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <button 
-                        onClick={() => setNonPayerNonDrinkers(Math.max(0, nonPayerNonDrinkers - 1))}
+                        onClick={() => setNonPayerNoAlcohol(Math.max(0, nonPayerNoAlcohol - 1))}
                         className="w-7 h-7 rounded-lg bg-white border border-gray-300 text-gray-500 flex items-center justify-center hover:bg-gray-50 text-sm font-bold shadow-sm"
                       >-</button>
-                      <span className="font-mono text-base font-bold text-[#3A3A3A] w-8 text-center">{nonPayerNonDrinkers}</span>
+                      <span className="font-mono text-base font-bold text-[#3A3A3A] w-8 text-center">{nonPayerNoAlcohol}</span>
                       <button 
-                        onClick={() => setNonPayerNonDrinkers(nonPayerNonDrinkers + 1)}
+                        onClick={() => setNonPayerNoAlcohol(nonPayerNoAlcohol + 1)}
                         className="w-7 h-7 rounded-lg bg-white border border-[#8A957A] text-[#8A957A] flex items-center justify-center hover:bg-[#8A957A]/10 text-sm font-bold shadow-sm"
+                      >+</button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 bg-[#7A8A95]/5 rounded-2xl border border-[#7A8A95]/10">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-[#7A8A95] rounded-full" />
+                      <span className="text-xs font-bold text-[#7A8A95] uppercase tracking-widest">未付組(沒吃)</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => setNonPayerNoFood(Math.max(0, nonPayerNoFood - 1))}
+                        className="w-7 h-7 rounded-lg bg-white border border-gray-300 text-gray-500 flex items-center justify-center hover:bg-gray-50 text-sm font-bold shadow-sm"
+                      >-</button>
+                      <span className="font-mono text-base font-bold text-[#3A3A3A] w-8 text-center">{nonPayerNoFood}</span>
+                      <button 
+                        onClick={() => setNonPayerNoFood(nonPayerNoFood + 1)}
+                        className="w-7 h-7 rounded-lg bg-white border border-[#7A8A95] text-[#7A8A95] flex items-center justify-center hover:bg-[#7A8A95]/10 text-sm font-bold shadow-sm"
                       >+</button>
                     </div>
                   </div>
@@ -378,14 +406,14 @@ export default function App() {
                     </div>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#8A957A] mb-2">參與人數</p>
-                    <p className="text-3xl font-mono font-black border-l-4 border-[#8A957A] pl-4">{totals.totalHeadcount}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#8A957A] mb-2">分擔人數</p>
+                    <p className="text-3xl font-mono font-black border-l-4 border-[#8A957A] pl-4">{totals.totalFoodEaters}</p>
                   </div>
                 </div>
 
                 <div className="space-y-6">
                   <div className="flex justify-between items-end border-b border-dashed border-gray-300 pb-2">
-                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">一般分擔 ({totals.totalHeadcount}人)</span>
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">一般分擔 ({totals.totalFoodEaters}人)</span>
                     <span className="text-2xl font-mono font-black text-[#5A5A5A]">${totals.perPersonGeneral.toFixed(1)}</span>
                   </div>
                   <div className="flex justify-between items-end border-b border-dashed border-gray-300 pb-2">
@@ -410,10 +438,12 @@ export default function App() {
                         <div className="flex flex-col">
                           <div className="flex items-center gap-3">
                             <span className={`font-black text-xs px-3 py-1 rounded-lg ${
-                              s.from.includes('喝') 
+                              s.from.includes('正常') 
                                 ? 'bg-[#9C7A7B]/10 text-[#9C7A7B]' 
-                                : s.from.includes('無') 
+                                : s.from.includes('沒酒') 
                                 ? 'bg-[#8A957A]/10 text-[#8A957A]' 
+                                : s.from.includes('沒吃')
+                                ? 'bg-[#7A8A95]/10 text-[#7A8A95]'
                                 : 'bg-[#7A8A95]/10 text-[#7A8A95]'
                             }`}>
                               {s.from}
@@ -461,7 +491,7 @@ export default function App() {
                       }
                       return `・ ${s.from} → ${s.to}: $${s.amount}`;
                     }).join('\n');
-                    const report = `【SharePay 結算報告】\n\n總支出: $${totals.totalPaid}\n總人數: ${totals.totalHeadcount}\n\n結算明細:\n${text}\n\n辛苦大家了！`;
+                    const report = `【SharePay 結算報告】\n\n總支出: $${totals.totalPaid}\n一般分擔人數: ${totals.totalFoodEaters}\n酒水分擔人數: ${totals.totalDrinkers}\n\n結算明細:\n${text}\n\n辛苦大家了！`;
                     navigator.clipboard.writeText(report);
                     alert('結算報告已成功複製！');
                   }}
