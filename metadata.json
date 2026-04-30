@@ -1,5 +1,5 @@
 {
-  "name": "分帳神器 (BillSplitter)",
+  "name": "SharePAY",
   "description": "一個方便多人共享開銷的工具，支持自定義人頭費、酒錢分攤，自動計算最終結算金額。",
   "requestFramePermissions": [],
   "majorCapabilities": []
